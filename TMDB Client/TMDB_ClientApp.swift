@@ -8,10 +8,17 @@
 import SwiftUI
 
 @main
-struct TMDB_ClientApp: App {
+struct TMDBApp: App {
+    private let container = DependencyContainer()
+    private let coordinator: Coordinating
+    
+    init() {
+        self.coordinator = container.makeCoordinator()
+    }
+    
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            coordinator.makeHomeView()
         }
     }
 }
