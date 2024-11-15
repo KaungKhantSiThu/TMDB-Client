@@ -17,18 +17,24 @@ class RealmMoviesStorage: MoviesStorage {
     func saveMovies(_ movies: [Movie], category: Category) async throws {
         logger.info("Saving \(movies.count) movies for category \(category)", category: .storage)
         do {
-            let realmMovies = movies.map { movie -> RealmMovie in 
+            
+            let realm = try await Realm()
+            
+            let realmMovies = movies.map { movie -> RealmMovie in
                 let realmMovie = RealmMovie(from: movie)
                 realmMovie.category = category.rawValue  // Add category
+                realmMovie.isFavorite = isFavorite(id: movie.id, with: realm)
+                print("ID: \(movie.id) \(movie.isFavorite)")
                 return realmMovie
             }
             
-            let realm = try await Realm()
+            
             try realm.write {
-                // First remove existing movies for this category
+//                 First remove existing movies for this category
                 let existingMovies = realm.objects(RealmMovie.self)
                     .where { $0.category == category.rawValue }
                 realm.delete(existingMovies)
+                
                 
                 // Then add the new ones
                 realm.add(realmMovies, update: .modified)
@@ -38,6 +44,12 @@ class RealmMoviesStorage: MoviesStorage {
         } catch {
             logger.error("Failed to save movies", category: .storage, error: error)
             throw error
+        }
+        
+        func isFavorite(id: Movie.ID, with realm: Realm) -> Bool {
+            let isFavorite = realm.object(ofType: RealmMovie.self, forPrimaryKey: id)?.isFavorite
+            
+            return isFavorite ?? false
         }
     }
     

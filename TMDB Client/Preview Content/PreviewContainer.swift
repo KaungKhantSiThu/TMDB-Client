@@ -27,7 +27,7 @@ extension Movie {
         posterPath: nil,
         backdropPath: nil,
         voteAverage: 8.5,
-        voteCount: 100
+        voteCount: 100, isFavorite: false
     )
 }
 #endif 

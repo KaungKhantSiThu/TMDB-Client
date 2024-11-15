@@ -196,7 +196,7 @@ public struct Movie: Identifiable, Codable, Equatable, Hashable, Sendable {
         voteCount: Int? = nil,
         hasVideo: Bool? = nil,
         isAdultOnly: Bool? = nil,
-        isFavorite: Bool = false
+        isFavorite: Bool
     ) {
         self.id = id
         self.title = title
