@@ -1,5 +1,6 @@
 import SwiftUI
 import Foundation
+import Combine
 
 
 class MovieCardViewModel: ObservableObject {
@@ -13,6 +14,8 @@ class MovieCardViewModel: ObservableObject {
     var posterPath: URL? { movie.posterPath }
     var rating: Double? { movie.voteAverage }
     
+    private var cancellables = Set<AnyCancellable>()
+    
     init(
         movie: Movie,
         imageLoader: ImageLoading,
@@ -23,13 +26,30 @@ class MovieCardViewModel: ObservableObject {
         self.favoriteManager = favoriteManager
     }
     
-    @MainActor
-    func checkFavoriteStatus() async {
-        do {
-            isFavorite = try await favoriteManager.isFavorite(movieId: movie.id)
-        } catch {
-            print(error.localizedDescription)
-            // TODO: Proper error handling
+    func checkFavoriteStatus() {
+        Future<Bool, Error> { [weak self] promise in
+            guard let self = self else { return }
+            Task {
+                do {
+                    let isFavorite = try await self.favoriteManager.isFavorite(movieId: self.movie.id)
+                    promise(.success(isFavorite))
+                } catch {
+                    promise(.failure(error))
+                }
+            }
         }
+        .receive(on: DispatchQueue.main)
+        .sink(
+            receiveCompletion: { completion in
+                if case .failure(let error) = completion {
+                    print(error.localizedDescription)
+                    // TODO: Proper error handling
+                }
+            },
+            receiveValue: { [weak self] isFavorite in
+                self?.isFavorite = isFavorite
+            }
+        )
+        .store(in: &cancellables)
     }
 } 

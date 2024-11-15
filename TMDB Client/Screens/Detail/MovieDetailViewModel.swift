@@ -24,6 +24,8 @@ class MovieDetailViewModel: LoadableObject {
     @Published private(set) var state: LoadingState<Movie> = .idle
     @Published var error: Error?
     
+    private var cancellables = Set<AnyCancellable>()
+    
     init(
         id: Movie.ID,
         moviesFetcher: MoviesFetching,
@@ -39,37 +41,84 @@ class MovieDetailViewModel: LoadableObject {
     func load() {
         state = .loading
         
-        Task {
-            do {
-                let movie = try await moviesFetcher.fetchDetail(forMovie: id)
-                
-                await MainActor.run {
-                    state = .loaded(movie)
-                }
-            } catch {
-                await MainActor.run {
-                    state = .failed(error)
+        Future<Movie, Error> { [weak self] promise in
+            guard let self = self else { return }
+            Task {
+                do {
+                    let movie = try await self.moviesFetcher.fetchDetail(forMovie: self.id)
+                    promise(.success(movie))
+                } catch {
+                    promise(.failure(error))
                 }
             }
         }
+        .receive(on: DispatchQueue.main)
+        .sink(
+            receiveCompletion: { [weak self] completion in
+                if case .failure(let error) = completion {
+                    self?.state = .failed(error)
+                }
+            },
+            receiveValue: { [weak self] movie in
+                self?.state = .loaded(movie)
+            }
+        )
+        .store(in: &cancellables)
     }
     
-    @MainActor
-    func checkFavoriteStatus() async {
-        do {
-            self.isFavorite = try await favoriteManager.isFavorite(movieId: id)
-        } catch {
-            self.error = error
+    func checkFavoriteStatus() {
+        Future<Bool, Error> { [weak self] promise in
+            guard let self = self else { return }
+            Task {
+                do {
+                    let isFavorite = try await self.favoriteManager.isFavorite(movieId: self.id)
+                    promise(.success(isFavorite))
+                } catch {
+                    promise(.failure(error))
+                }
+            }
         }
+        .receive(on: DispatchQueue.main)
+        .sink(
+            receiveCompletion: { [weak self] completion in
+                if case .failure(let error) = completion {
+                    self?.error = error
+                }
+            },
+            receiveValue: { [weak self] isFavorite in
+                self?.isFavorite = isFavorite
+            }
+        )
+        .store(in: &cancellables)
     }
     
-    @MainActor
-    func toggleFavorite() async {
-        do {
-            try await favoriteManager.toggleFavorite(for: id)
-            self.isFavorite.toggle()
-        } catch {
-            self.error = error
+    func toggleFavorite() {
+        Future<Void, Error> { [weak self] promise in
+            guard let self = self else { return }
+            Task {
+                do {
+                    try await self.favoriteManager.toggleFavorite(for: self.id)
+                    self.logger.info("Toggled favorite status for movie \(self.id)")
+                    promise(.success(()))
+                } catch {
+                    promise(.failure(error))
+                }
+            }
         }
+        .receive(on: RunLoop.main)
+        .sink(
+            receiveCompletion: { completion in
+                switch completion {
+                case .finished:
+                    self.isFavorite.toggle()
+                case .failure(let error):
+                    print("Error toggling favorite: \(error)")
+                }
+            },
+            receiveValue: { _ in
+            }
+        )
+        .store(in: &cancellables)
     }
 }
+

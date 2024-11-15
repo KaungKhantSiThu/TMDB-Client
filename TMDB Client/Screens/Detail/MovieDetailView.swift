@@ -19,17 +19,15 @@ struct MovieDetailView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
-                    Task {
-                        await viewModel.toggleFavorite()
-                    }
+                    viewModel.toggleFavorite()
                 } label: {
                     Image(systemName: viewModel.isFavorite ? "bookmark.fill" : "bookmark")
                 }
             }
         }
         .navigationBarTitleDisplayMode(.inline)
-        .task {
-            await viewModel.checkFavoriteStatus()
+        .onAppear {
+            viewModel.checkFavoriteStatus()
         }
         .alert("Error", isPresented: Binding(
             get: { viewModel.error != nil },
